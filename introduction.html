@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>疾風山徑：秋意控風版 v2.9.1</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 基礎樣式重設與全螢幕配置 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #080200;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI 資訊層 (頂部 HUD) */
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .stat-group {
+            background: rgba(28, 13, 3, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            padding: 8px 18px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #f59e0b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
+        }
+
+        .stat-val {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #fef08a;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 虛擬控制器 (手機端) */
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            right: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .ctrl-btn {
+            width: 64px;
+            height: 64px;
+            background: rgba(245, 158, 11, 0.15);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 2px solid rgba(245, 158, 11, 0.4);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            touch-action: manipulation;
+        }
+
+        .ctrl-btn:active {
+            background: rgba(245, 158, 11, 0.5);
+            transform: scale(0.9);
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.6);
+        }
+
+        .ctrl-btn svg {
+            width: 32px;
+            height: 32px;
+            fill: #fef08a;
+        }
+
+        .ctrl-column {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* 滿版覆蓋遮罩 (開始/結束畫面) */
+        #overlay, #summary-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(35, 12, 2, 0.9) 0%, rgba(10, 3, 0, 0.98) 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            text-align: center;
+            padding: 20px;
+            transition: opacity 0.4s ease;
+        }
+
+        #summary-overlay {
+            display: none;
+            opacity: 0;
+        }
+
+        /* 按鈕樣式 */
+        .btn {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            color: #fff;
+            padding: 14px 36px;
+            font-size: 1.25rem;
+            font-weight: 800;
+            border-radius: 30px;
+            box-shadow: 0 6px 20px rgba(217, 119, 6, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(251, 191, 36, 0.4);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.1em;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(217, 119, 6, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        /* 結算卡片 */
+        .summary-card {
+            background: rgba(28, 13, 3, 0.9);
+            border: 2px solid rgba(245, 158, 11, 0.35);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 480px;
+            width: 100%;
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.7), inset 0 1px 2px rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            animation: cardEntrance 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes cardEntrance {
+            from { transform: scale(0.8) translateY(30px); opacity: 0; }
+            to { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .summary-title {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #f3f4f6;
+            margin-bottom: 20px;
+            letter-spacing: -0.02em;
+            background: linear-gradient(180deg, #ffffff 0%, #d1d5db 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(245, 158, 11, 0.15);
+            padding: 12px 0;
+            font-size: 1.1rem;
+            color: #d1d5db;
+            font-weight: 600;
+        }
+
+        /* --- 核心強化：終極流光成就標籤特效 --- */
+        #rank-display {
+            position: relative;
+            font-size: 2.8rem;
+            font-weight: 900;
+            margin-top: 24px;
+            margin-bottom: 32px;
+            text-align: center;
+            display: inline-block;
+            width: 100%;
+            letter-spacing: 0.05em;
+            
+            /* 金黃、橙紅交織的秋意漸變流光 */
+            background: linear-gradient(
+                90deg, 
+                #f59e0b 0%, 
+                #fef08a 25%, 
+                #ea580c 50%, 
+                #fef08a 75%, 
+                #f59e0b 100%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            
+            /* 流光滾動動畫 */
+            animation: fallFlowShimmer 3s linear infinite;
+            
+            /* 外發光霓虹氣場 */
+            filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.5)) 
+                    drop-shadow(0 0 20px rgba(234, 88, 12, 0.3));
+        }
+
+        /* 閃爍粒子裝飾背景 */
+        #rank-display::before {
+            content: '✦';
+            position: absolute;
+            left: 10px;
+            top: -10px;
+            font-size: 1rem;
+            -webkit-text-fill-color: #fef08a;
+            animation: sparklePulse 1.5s ease-in-out infinite alternate;
+        }
+
+        #rank-display::after {
+            content: '✦';
+            position: absolute;
+            right: 10px;
+            bottom: -10px;
+            font-size: 1rem;
+            -webkit-text-fill-color: #fef08a;
+            animation: sparklePulse 1.5s ease-in-out infinite alternate-reverse;
+        }
+
+        /* 流光移動動畫 */
+        @keyframes fallFlowShimmer {
+            0% {
+                background-position: 0% center;
+            }
+            100% {
+                background-position: -200% center;
+            }
+        }
+
+        /* 星芒閃爍 */
+        @keyframes sparklePulse {
+            0% { transform: scale(0.6) rotate(0deg); opacity: 0.4; filter: blur(0.5px); }
+            100% { transform: scale(1.2) rotate(90deg); opacity: 1; filter: drop-shadow(0 0 5px #fef08a); }
+        }
+
+        /* 音樂切換鈕 */
+        #audio-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 30;
+            background: rgba(30, 16, 5, 0.8);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #audio-toggle:hover {
+            transform: scale(1.1);
+            background: rgba(245, 158, 11, 0.2);
+        }
+        #audio-toggle svg {
+            width: 22px;
+            height: 22px;
+            fill: #fef08a;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- 音樂控制按鈕 -->
+    <button id="audio-toggle" title="切換音樂">
+        <!-- 預設為靜音圖示 -->
+        <svg id="audio-icon" viewBox="0 0 24 24">
+            <path d="M4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.03c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 16.18L9.82 14H7v-4h2.82L12 12.18v4z"/>
+        </svg>
+    </button>
+
+    <!-- UI 資訊層 -->
+    <div id="ui-layer">
+        <div class="flex gap-4 md:gap-10">
+            <div class="stat-group">
+                <span class="stat-label">救助芒花數</span>
+                <span id="rescued-count" class="stat-val text-amber-300">0</span>
+            </div>
+            <div class="stat-group">
+                <span class="stat-label">行駛距離</span>
+                <span id="score" class="stat-val">0 m</span>
+            </div>
+        </div>
+        <div class="stat-group text-right">
+            <span class="stat-label">風速等級</span>
+            <span id="speed-val" class="stat-val text-red-400">秋分</span>
+        </div>
+    </div>
+
+    <!-- 虛擬搖桿控制鈕 (手機專用) -->
+    <div id="controls">
+        <div id="btn-left" class="ctrl-btn">
+            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+        </div>
+        <div class="ctrl-column">
+            <div id="btn-up" class="ctrl-btn">
+                <svg viewBox="0 0 24 24"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
+            </div>
+            <div id="btn-down" class="ctrl-btn">
+                <svg viewBox="0 0 24 24"><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg>
+            </div>
+        </div>
+        <div id="btn-right" class="ctrl-btn">
+            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+        </div>
+    </div>
+
+    <!-- 初始開始畫面 -->
+    <div id="overlay">
+        <h1 class="text-4xl md:text-6xl font-black mb-5 text-white tracking-tighter drop-shadow-md">感受秋天芒花之美</h1>
+        <div class="text-lg md:text-xl mb-6 text-amber-200 font-bold max-w-md leading-relaxed">
+            您是秋風中的一片金黃楓葉。<br>
+            控制方向避開致命的赤紅旋風，<br>
+            順著氣流救助那些飛散的金色芒花。
+        </div>
+        
+        <!-- 本機 MP3 載入指引 -->
+        <div class="mb-6 text-xs text-amber-300 bg-amber-950/70 border border-amber-800/60 p-3 rounded-xl max-w-md">
+            🎵 <b>本機音樂遊玩說明：</b><br>
+            使用記事本存成 .html，將其與您的音頻檔 <b>Hunt_in_the_Maple_Grove.mp3</b> 置於同一資料夾下，即可完美載入悠揚的原作音樂！
+        </div>
+
+        <div class="mb-8 text-xs text-amber-400 font-semibold bg-amber-950/40 px-4 py-2 rounded-full border border-amber-900/50">
+            鍵盤：↑ 飛升、↓ 急降、←/→ 左右移動
+        </div>
+        <button id="start-btn" class="btn">開始挑戰</button>
+        <p id="audio-tip" class="text-xs text-amber-500/70 mt-4">正在預備秋意旋律...</p>
+    </div>
+
+    <!-- 遊戲結束結算畫面 -->
+    <div id="summary-overlay">
+        <div class="summary-card">
+            <h2 id="summary-header" class="summary-title">航行終結</h2>
+            <div class="summary-item"><span>總飛行距離</span><span id="final-dist" class="text-white">0 m</span></div>
+            <div class="summary-item"><span>成功救助</span><span id="amber-300" class="text-amber-300">0 朵</span></div>
+            
+            <!-- 閃耀流光成就勳章 -->
+            <div id="rank-display">山徑旅人</div>
+            
+            <button id="restart-btn" class="btn w-full">再次啟程</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 終極音頻兼容性與雙引擎解決方案 ---
+    // 已更換為 Hunt_in_the_Maple_Grove.mp3
+    const BGM_FILENAME = "Hunt_in_the_Maple_Grove.mp3";
+    
+    let htmlAudio = null;
+    let audioContext = null;
+    let isPlaying = false;
+    let isProceduralActive = false; 
+    let audioInitialized = false;
+
+    let proceduralNodes = [];
+    let chordTimeoutId = null;
+
+    const audioToggleBtn = document.getElementById('audio-toggle');
+    const audioIcon = document.getElementById('audio-icon');
+    const audioTip = document.getElementById('audio-tip');
+
+    const playIconPath = "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z";
+    const muteIconPath = "M4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.03c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 16.18L9.82 14H7v-4h2.82L12 12.18v4z";
+
+    function initAudioEngine() {
+        if (audioInitialized) return;
+        audioInitialized = true;
+
+        try {
+            htmlAudio = new Audio(BGM_FILENAME);
+            htmlAudio.loop = true;
+            htmlAudio.addEventListener('error', (e) => {
+                console.warn("本機未檢測到實體音檔，將切換為 Web Audio 即時音效。");
+            });
+            console.log("HTML5 Audio 初始化成功");
+        } catch(e) {
+            console.error("HTML5 Audio 建立失敗，改用 Web Audio 備援", e);
+        }
+    }
+
+    function startMusic() {
+        initAudioEngine();
+        if (isPlaying) return;
+
+        if (htmlAudio) {
+            htmlAudio.play()
+                .then(() => {
+                    isPlaying = true;
+                    isProceduralActive = false;
+                    audioIcon.innerHTML = `<path d="${playIconPath}"/>`;
+                    audioTip.innerText = "✦ 已播放本機音檔：Hunt in the Maple Grove ✦";
+                })
+                .catch(err => {
+                    console.warn("播放失敗，嘗試備份風聲合成音效。");
+                    if (err.name === "NotAllowedError") {
+                        audioTip.innerText = "✦ 點擊解鎖專屬 MP3 音效 ✦";
+                    } else {
+                        playProceduralAudio();
+                    }
+                });
+        } else {
+            playProceduralAudio();
+        }
+    }
+
+    function playProceduralAudio() {
+        if (isPlaying) return;
+        
+        try {
+            const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtxClass) {
+                audioTip.innerText = "瀏覽器不支援音頻播放";
+                return;
+            }
+
+            audioContext = new AudioCtxClass();
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const bufferSize = audioContext.sampleRate * 2;
+            const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+
+            const whiteNoise = audioContext.createBufferSource();
+            whiteNoise.buffer = noiseBuffer;
+            whiteNoise.loop = true;
+
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 350;
+            filter.Q.value = 2.5;
+
+            const lfo = audioContext.createOscillator();
+            lfo.frequency.value = 0.12; 
+            const lfoGain = audioContext.createGain();
+            lfoGain.gain.value = 180;
+
+            lfo.connect(lfoGain);
+            lfoGain.connect(filter.frequency);
+
+            const windGain = audioContext.createGain();
+            windGain.gain.value = 0.18; 
+
+            whiteNoise.connect(filter);
+            filter.connect(windGain);
+            windGain.connect(audioContext.destination);
+
+            lfo.start();
+            whiteNoise.start();
+
+            proceduralNodes.push(whiteNoise, lfo, windGain);
+
+            const chords = [
+                [220.00, 261.63, 329.63], 
+                [196.00, 246.94, 293.66], 
+                [174.61, 220.00, 261.63], 
+                [164.81, 207.65, 246.94]  
+            ];
+            
+            let chordIndex = 0;
+            function triggerNextChord() {
+                if (!isPlaying || !isProceduralActive) return;
+                const now = audioContext.currentTime;
+                const notes = chords[chordIndex];
+
+                notes.forEach(freq => {
+                    const osc = audioContext.createOscillator();
+                    osc.type = 'triangle'; 
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    const oscFilter = audioContext.createBiquadFilter();
+                    oscFilter.type = 'lowpass';
+                    oscFilter.frequency.setValueAtTime(500, now);
+
+                    const oscGain = audioContext.createGain();
+                    oscGain.gain.setValueAtTime(0, now);
+                    oscGain.gain.linearRampToValueAtTime(0.04, now + 2.0); 
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 5.8); 
+
+                    osc.connect(oscFilter);
+                    oscFilter.connect(oscGain);
+                    oscGain.connect(audioContext.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 6.0);
+                });
+
+                chordIndex = (chordIndex + 1) % chords.length;
+                chordTimeoutId = setTimeout(triggerNextChord, 6000); 
+            }
+
+            isProceduralActive = true;
+            isPlaying = true;
+            triggerNextChord();
+
+            audioIcon.innerHTML = `<path d="${playIconPath}"/>`;
+            audioTip.innerText = "✦ 已啟動秋意即時合成風效與和弦 ✦";
+        } catch(e) {
+            console.error("Web Audio 啟動失敗:", e);
+        }
+    }
+
+    function stopMusic() {
+        if (!isPlaying) return;
+
+        if (htmlAudio) {
+            htmlAudio.pause();
+        }
+
+        proceduralNodes.forEach(node => {
+            try { node.stop(); } catch(e){}
+            try { node.disconnect(); } catch(e){}
+        });
+        proceduralNodes = [];
+
+        if (chordTimeoutId) {
+            clearTimeout(chordTimeoutId);
+            chordTimeoutId = null;
+        }
+
+        isPlaying = false;
+        isProceduralActive = false;
+        audioIcon.innerHTML = `<path d="${muteIconPath}"/>`;
+        audioTip.innerText = "音效已暫停";
+    }
+
+    function toggleMusic() {
+        if (isPlaying) stopMusic();
+        else startMusic();
+    }
+
+    audioToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleMusic();
+    });
+
+    document.body.addEventListener('click', () => {
+        initAudioEngine();
+    }, { once: true });
+
+    setTimeout(() => {
+        audioTip.innerText = "✦ 點擊「開始挑戰」聆聽秋風之音 ✦";
+    }, 1500);
+
+    // --- 遊戲畫布與引擎 ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('game-container');
+
+    function resizeCanvas() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // 遊戲狀態常數
+    const STATE_START = 'start';
+    const STATE_PLAYING = 'playing';
+    const STATE_GAMEOVER = 'gameover';
+    let gameState = STATE_START;
+
+    // 遊戲關鍵變數
+    let score = 0;
+    let rescuedCount = 0;
+    let speedLevel = "秋分";
+    let speedMultiplier = 1.0; 
+
+    // 視差背景滾動偏移量 (世界絕對座標)
+    let bgScrollFar = 0;
+    let bgScrollMid = 0;
+
+    const keys = {
+        up: false,
+        down: false,
+        left: false,
+        right: false
+    };
+
+    const player = {
+        x: 100,
+        y: 300,
+        radius: 18,
+        vy: 0,
+        vx: 0,
+        gravity: 0.15,
+        targetAngle: 0,
+        currentAngle: 0,
+        pulse: 0
+    };
+
+    let obstacles = [];
+    let collectibles = [];
+    let particles = [];
+    let bgLeaves = []; 
+    let windLines = []; 
+    let backgroundClouds = []; // 浮世繪風格捲雲
+    let nightFireflies = [];  // 夜晚螢火蟲
+
+    // --- 顏色平滑內插插值 (Lerp) 函數，用於驚艷的晝夜變換 ---
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : {r: 0, g: 0, b: 0};
+    }
+
+    function rgbToHex(r, g, b) {
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function lerpColor(colorA, colorB, t) {
+        const a = hexToRgb(colorA);
+        const b = hexToRgb(colorB);
+        const r = Math.round(a.r + (b.r - a.r) * t);
+        const g = Math.round(a.g + (b.g - a.g) * t);
+        const bVal = Math.round(a.b + (b.b - a.b) * t);
+        return rgbToHex(r, g, bVal);
+    }
+
+    // --- 晝夜流轉與場景主題色配方 (大幅放慢風景變化速度：一輪由 1200 增長至 3600 分) ---
+    const DAY_CYCLE_DURATION = 3600; 
+
+    const TOD_PALETTES = [
+        { // 0: 秋晨 Dawn (桃紅、柔紫、粉金 - 寧靜晨曦)
+            skyTop: "#180621", skyMid: "#521d3f", skyBot: "#b84f54",
+            mountainFar: "#2d0b17", mountainMid: "#19020d",
+            glowColor: "rgba(253, 164, 186, 0.4)", ambientLight: 0.85
+        },
+        { // 1: 秋煦 Golden Day (濃烈金黃、琥珀、極致耀眼 - 滿山金黃)
+            skyTop: "#3d1902", skyMid: "#944503", skyBot: "#f59e0b",
+            mountainFar: "#4d1601", mountainMid: "#260600",
+            glowColor: "rgba(254, 240, 138, 0.6)", ambientLight: 1.0
+        },
+        { // 2: 楓落暮色 Sunset (燃燒血紅、朱橘、絳紫 - 淒美朱秋)
+            skyTop: "#0f010e", skyMid: "#850014", skyBot: "#ea580c",
+            mountainFar: "#330004", mountainMid: "#170002",
+            glowColor: "rgba(239, 68, 68, 0.65)", ambientLight: 0.9
+        },
+        { // 3: 極月之夜 Night (深邃靛藍、星空絳紫 - 夢幻豐收巨月)
+            skyTop: "#010008", skyMid: "#08031c", skyBot: "#1f093d",
+            mountainFar: "#080112", mountainMid: "#030008",
+            glowColor: "rgba(254, 240, 138, 0.55)", ambientLight: 0.65
+        }
+    ];
+
+    function getDynamicPalette() {
+        const cycleProgress = (score % DAY_CYCLE_DURATION) / DAY_CYCLE_DURATION; // 0.0 ~ 1.0
+        const segmentFactor = cycleProgress * 4; // 0.0 ~ 4.0
+        const baseIndex = Math.floor(segmentFactor) % 4;
+        const nextIndex = (baseIndex + 1) % 4;
+        const t = segmentFactor - Math.floor(segmentFactor); // 內插比例
+
+        const pA = TOD_PALETTES[baseIndex];
+        const pB = TOD_PALETTES[nextIndex];
+
+        return {
+            skyTop: lerpColor(pA.skyTop, pB.skyTop, t),
+            skyMid: lerpColor(pA.skyMid, pB.skyMid, t),
+            skyBot: lerpColor(pA.skyBot, pB.skyBot, t),
+            mountainFar: lerpColor(pA.mountainFar, pB.mountainFar, t),
+            mountainMid: lerpColor(pA.mountainMid, pB.mountainMid, t),
+            glowColor: pA.glowColor, // 渲染時由軌道公式決定
+            ambientLight: pA.ambientLight + (pB.ambientLight - pA.ambientLight) * t,
+            phase: baseIndex,
+            phaseProgress: t
+        };
+    }
+
+    // --- 初始化粒子與背景裝飾 ---
+    function initDecorativeElements() {
+        windLines = [];
+        for (let i = 0; i < 20; i++) {
+            windLines.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                length: Math.random() * 200 + 80,
+                speed: Math.random() * 3 + 2, 
+                opacity: Math.random() * 0.25 + 0.08
+            });
+        }
+
+        bgLeaves = [];
+        for (let i = 0; i < 25; i++) {
+            bgLeaves.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 12 + 6,
+                speedX: -(Math.random() * 2.0 + 0.8),
+                speedY: Math.random() * 0.6 - 0.3,
+                angle: Math.random() * Math.PI * 2,
+                rotSpeed: Math.random() * 0.03 - 0.015,
+                color: ['#b45309', '#78350f', '#d97706', '#9a3412', '#ea580c'][Math.floor(Math.random() * 5)]
+            });
+        }
+
+        // 雲只隨世界滾動 (bgScrollFar) 移動，保持絕對世界持久性
+        backgroundClouds = [];
+        for (let i = 0; i < 8; i++) {
+            backgroundClouds.push({
+                worldX: Math.random() * 3000, // 分配在寬大的世界軸上
+                y: Math.random() * (canvas.height * 0.45),
+                scale: Math.random() * 0.6 + 0.5,
+                speedFactor: Math.random() * 0.15 + 0.05
+            });
+        }
+
+        // 夜晚發光螢火蟲
+        nightFireflies = [];
+        for (let i = 0; i < 25; i++) {
+            nightFireflies.push({
+                x: Math.random() * canvas.width,
+                y: canvas.height * 0.55 + Math.random() * (canvas.height * 0.45),
+                vx: Math.random() * 0.6 - 0.3,
+                vy: -(Math.random() * 0.5 + 0.2),
+                size: Math.random() * 3 + 2,
+                alpha: 0,
+                pulse: Math.random() * Math.PI
+            });
+        }
+    }
+    initDecorativeElements();
+
+    // 監聽鍵盤
+    window.addEventListener('keydown', (e) => {
+        if (gameState !== STATE_PLAYING) return;
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = true;
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = false;
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+    });
+
+    // 觸控虛擬鍵盤綁定
+    function bindTouchBtn(id, keyProp) {
+        const btn = document.getElementById(id);
+        
+        const startHandler = (e) => {
+            e.preventDefault();
+            startMusic(); 
+            if (gameState === STATE_PLAYING) {
+                keys[keyProp] = true;
+            }
+        };
+
+        const endHandler = (e) => {
+            e.preventDefault();
+            keys[keyProp] = false;
+        };
+
+        btn.addEventListener('touchstart', startHandler, { passive: false });
+        btn.addEventListener('touchend', endHandler, { passive: false });
+        btn.addEventListener('mousedown', startHandler);
+        btn.addEventListener('mouseup', endHandler);
+        btn.addEventListener('mouseleave', endHandler);
+    }
+
+    bindTouchBtn('btn-up', 'up');
+    bindTouchBtn('btn-down', 'down');
+    bindTouchBtn('btn-left', 'left');
+    bindTouchBtn('btn-right', 'right');
+
+    // --- 粒子爆炸特效系統 ---
+    function spawnExplosion(x, y, color, count = 12) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 5 + 1.5;
+            particles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                radius: Math.random() * 4 + 2,
+                color: color,
+                alpha: 1,
+                decay: Math.random() * 0.025 + 0.015
+            });
+        }
+    }
+
+    // --- 實體產生器 ---
+    let obstacleTimer = 0;
+    let collectibleTimer = 0;
+
+    function spawnEntities() {
+        obstacleTimer++;
+        collectibleTimer++;
+
+        const obstacleSpawnInterval = Math.max(28, 70 - Math.floor(score / 150));
+        const collectibleSpawnInterval = Math.max(45, 85 - Math.floor(score / 250));
+
+        // 產生流動氣流風場 (障礙物)
+        if (obstacleTimer >= obstacleSpawnInterval) {
+            obstacleTimer = 0;
+            const yPos = Math.random() * (canvas.height - 200) + 75;
+            const windHeight = Math.random() * 30 + 50;  
+            const windWidth = Math.random() * 120 + 170; 
+            
+            obstacles.push({
+                x: canvas.width + windWidth,
+                y: yPos,
+                width: windWidth,
+                height: windHeight,
+                speed: (Math.random() * 3 + 5.5) * speedMultiplier, 
+                pulse: Math.random() * Math.PI,
+                particles: [] 
+            });
+        }
+
+        // 產生拯救芒花 (收集物)
+        if (collectibleTimer >= collectibleSpawnInterval) {
+            collectibleTimer = 0;
+            const yPos = Math.random() * (canvas.height - 140) + 70;
+            collectibles.push({
+                x: canvas.width + 50,
+                y: yPos,
+                radius: 14,
+                speed: (Math.random() * 2 + 4) * speedMultiplier, 
+                bob: Math.random() * Math.PI
+            });
+        }
+    }
+
+    // --- 重置遊戲數據 ---
+    function resetGame() {
+        score = 0;
+        rescuedCount = 0;
+        speedLevel = "秋分";
+        speedMultiplier = 1.0; 
+        
+        bgScrollFar = 0;
+        bgScrollMid = 0;
+
+        player.x = 150;
+        player.y = canvas.height / 2;
+        player.vy = 0;
+        player.vx = 0;
+        player.targetAngle = 0;
+        player.currentAngle = 0;
+
+        obstacles = [];
+        collectibles = [];
+        particles = [];
+        
+        initDecorativeElements();
+
+        document.getElementById('rescued-count').innerText = rescuedCount;
+        document.getElementById('score').innerText = "0 m";
+        document.getElementById('speed-val').innerText = speedLevel;
+        document.getElementById('speed-val').className = "stat-val text-amber-300";
+    }
+
+    // --- 遊戲邏輯更新 ---
+    function update() {
+        if (gameState !== STATE_PLAYING) return;
+
+        // 1. 優化：調慢速度增加倍率（每 1000m 僅提升約 0.1 倍速度，極限上限降低至 1.8，更易控）
+        speedMultiplier = Math.min(1.8, 1.0 + (score / 1000));
+
+        // 視差背景滾動更新 (基於世界時間平滑前進)
+        bgScrollFar += 0.3 * speedMultiplier;
+        bgScrollMid += 1.0 * speedMultiplier;
+
+        // 2. 風切視覺線條與落葉
+        windLines.forEach(line => {
+            line.x -= line.speed * speedMultiplier * 1.8;
+            if (line.x + line.length < 0) {
+                line.x = canvas.width + 100;
+                line.y = Math.random() * canvas.height;
+                line.speed = Math.random() * 3 + 2;
+            }
+        });
+
+        bgLeaves.forEach(leaf => {
+            leaf.x += leaf.speedX * speedMultiplier;
+            leaf.y += leaf.speedY;
+            leaf.angle += leaf.rotSpeed * speedMultiplier;
+            if (leaf.x < -30) {
+                leaf.x = canvas.width + 30;
+                leaf.y = Math.random() * canvas.height;
+            }
+        });
+
+        // 3. 玩家操控與物理模擬
+        let forceY = player.gravity;
+        let forceX = 0;
+
+        if (keys.up) {
+            forceY = -0.42;
+            player.targetAngle = -0.35; 
+        } else if (keys.down) {
+            forceY = 0.7;
+            player.targetAngle = 0.5; 
+        } else {
+            player.targetAngle = 0.05; 
+        }
+
+        if (keys.left) {
+            forceX = -0.4;
+        } else if (keys.right) {
+            forceX = 0.4;
+        }
+
+        player.vy += forceY;
+        player.vx += forceX;
+
+        player.vy *= 0.95;
+        player.vx *= 0.95;
+
+        player.y += player.vy;
+        player.x += player.vx;
+
+        // 邊界限制
+        if (player.y < player.radius) {
+            player.y = player.radius;
+            player.vy = 0;
+        }
+        if (player.y > canvas.height - player.radius) {
+            player.y = canvas.height - player.radius;
+            player.vy = 0;
+        }
+        if (player.x < player.radius + 10) {
+            player.x = player.radius + 10;
+            player.vx = 0;
+        }
+        if (player.x > canvas.width * 0.6) {
+            player.x = canvas.width * 0.6;
+            player.vx = 0;
+        }
+
+        player.currentAngle += (player.targetAngle - player.currentAngle) * 0.15;
+        player.pulse += 0.08 * speedMultiplier;
+
+        // 4. 動態難度與距離顯示
+        score += 0.18 * speedMultiplier;
+        const currentDistance = Math.floor(score);
+        document.getElementById('score').innerText = currentDistance + " m";
+
+        if (currentDistance < 350) {
+            speedLevel = "秋分";
+            document.getElementById('speed-val').className = "stat-val text-amber-300";
+        } else if (currentDistance < 900) {
+            speedLevel = "寒露";
+            document.getElementById('speed-val').className = "stat-val text-orange-400 font-bold";
+        } else if (currentDistance < 1800) {
+            speedLevel = "霜降";
+            document.getElementById('speed-val').className = "stat-val text-orange-500 font-extrabold scale-105 transition-transform duration-300";
+        } else {
+            speedLevel = "立冬 ⚠️";
+            document.getElementById('speed-val').className = "stat-val text-red-500 font-black animate-pulse scale-110 duration-200";
+        }
+        document.getElementById('speed-val').innerText = speedLevel + ` (x${speedMultiplier.toFixed(2)})`;
+
+        // 5. 生成障礙風場與芒花
+        spawnEntities();
+
+        // 6. 流動風場更新與寬幅碰撞檢測 (精確 AABB 矩形 v.s. 圓形碰撞)
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            const obs = obstacles[i];
+            obs.x -= obs.speed;
+            obs.pulse += 0.05;
+
+            // 在風卷內生成正在螺旋打轉的深紅枯葉與沙塵 
+            if (Math.random() < 0.5) {
+                obs.particles.push({
+                    x: obs.width,
+                    y: (Math.random() - 0.5) * obs.height,
+                    vx: -(Math.random() * 3 + 5),
+                    vy: Math.sin(obs.pulse * 2) * 1.5, 
+                    size: Math.random() * 4 + 2,
+                    angle: Math.random() * Math.PI * 2,
+                    rotSpeed: Math.random() * 0.1 - 0.05,
+                    alpha: 0.95
+                });
+            }
+
+            for (let j = obs.particles.length - 1; j >= 0; j--) {
+                const p = obs.particles[j];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.angle += p.rotSpeed;
+                p.alpha -= 0.012;
+                if (p.x < 0 || p.alpha <= 0) {
+                    obs.particles.splice(j, 1);
+                }
+            }
+
+            const halfW = obs.width / 2;
+            const halfH = obs.height / 2;
+            const centerX = obs.x - halfW;
+            const centerY = obs.y;
+
+            const rectMinX = centerX - halfW;
+            const rectMaxX = centerX + halfW;
+            const rectMinY = centerY - halfH;
+            const rectMaxY = centerY + halfH;
+
+            const closestX = Math.max(rectMinX, Math.min(player.x, rectMaxX));
+            const closestY = Math.max(rectMinY, Math.min(player.y, rectMaxY));
+
+            const distSecX = player.x - closestX;
+            const distSecY = player.y - closestY;
+            const collisionDist = Math.hypot(distSecX, distSecY);
+
+            if (collisionDist < player.radius - 2) {
+                spawnExplosion(player.x, player.y, '#f97316', 30);
+                spawnExplosion(player.x, player.y, '#ef4444', 25);
+                endGame();
+                return;
+            }
+
+            if (obs.x < -200) {
+                obstacles.splice(i, 1);
+            }
+        }
+
+        // 7. 芒花收集檢測
+        for (let i = collectibles.length - 1; i >= 0; i--) {
+            const col = collectibles[i];
+            col.x -= col.speed;
+            col.bob += 0.04 * speedMultiplier;
+            col.y += Math.sin(col.bob) * 0.45;
+
+            const dx = player.x - col.x;
+            const dy = player.y - col.y;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance < player.radius + col.radius) {
+                rescuedCount++;
+                document.getElementById('rescued-count').innerText = rescuedCount;
+                
+                spawnExplosion(col.x, col.y, '#fef08a', 15);
+                spawnExplosion(col.x, col.y, '#fbbf24', 10);
+                
+                score += 18;
+
+                collectibles.splice(i, 1);
+            } else if (col.x < -col.radius - 20) {
+                collectibles.splice(i, 1);
+            }
+        }
+
+        // 8. 爆炸特效粒子淡化
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= p.decay;
+            if (p.alpha <= 0) {
+                particles.splice(i, 1);
+            }
+        }
+
+        // 9. 更新螢火蟲 (夜晚才閃爍發光並徐徐升起)
+        const currentPal = getDynamicPalette();
+        if (currentPal.phase === 3) { 
+            nightFireflies.forEach(f => {
+                f.x += f.vx + Math.sin(f.pulse) * 0.2;
+                f.y += f.vy;
+                f.pulse += 0.02;
+                // 逐漸亮起
+                f.alpha = Math.min(1.0, f.alpha + 0.01);
+                if (f.y < -10) {
+                    f.x = Math.random() * canvas.width;
+                    f.y = canvas.height + 10;
+                    f.alpha = 0;
+                }
+            });
+        } else {
+            // 白天螢火蟲徐徐隱去
+            nightFireflies.forEach(f => {
+                f.alpha = Math.max(0, f.alpha - 0.02);
+            });
+        }
+    }
+
+    // --- 畫布圖形渲染 ---
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 獲取當前流暢內插之晝夜色調
+        const dynamicPal = getDynamicPalette();
+
+        // 1. 晝夜漸層天空
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bgGrad.addColorStop(0, dynamicPal.skyTop);   
+        bgGrad.addColorStop(0.5, dynamicPal.skyMid); 
+        bgGrad.addColorStop(1, dynamicPal.skyBot);   
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 2. 如果是夜晚，繪製滿天閃爍的璀璨星群與流星星塵
+        if (dynamicPal.phase === 3 || (dynamicPal.phase === 2 && dynamicPal.phaseProgress > 0.6)) {
+            const nightWeight = dynamicPal.phase === 3 ? 1.0 : (dynamicPal.phaseProgress - 0.6) / 0.4;
+            ctx.save();
+            ctx.globalAlpha = nightWeight * 0.6;
+            ctx.fillStyle = "#ffffff";
+            for (let i = 0; i < 40; i++) {
+                // 固定星點位置
+                const starX = Math.abs(Math.sin(i * 142.12)) * canvas.width;
+                const starY = Math.abs(Math.cos(i * 98.7)) * (canvas.height * 0.45);
+                const starSize = (Math.sin(score * 0.05 + i) * 0.4 + 0.6) * 2;
+                ctx.beginPath();
+                ctx.arc(starX, starY, starSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // 3. 【全新機制】：天體共享物理圓弧軌道 (避免瞬間跳轉，日月無縫輪迴)
+        // 軌道角度 theta 隨世界分數單調遞增，完全平滑
+        const orbitAngle = ((score % DAY_CYCLE_DURATION) / DAY_CYCLE_DURATION) * Math.PI * 2 - Math.PI / 2;
+        const orbitRadiusX = canvas.width * 0.4;
+        const orbitRadiusY = canvas.height * 0.35;
+        const skyCenterX = canvas.width * 0.5;
+        const skyCenterY = canvas.height * 0.55;
+
+        // 計算太陽位置（東升西落）
+        const sunX = skyCenterX + Math.cos(orbitAngle) * orbitRadiusX;
+        const sunY = skyCenterY + Math.sin(orbitAngle) * orbitRadiusY;
+        // 計算巨月位置（太陽的完美對角線）
+        const moonX = skyCenterX + Math.cos(orbitAngle + Math.PI) * orbitRadiusX;
+        const moonY = skyCenterY + Math.sin(orbitAngle + Math.PI) * orbitRadiusY;
+
+        // 計算太陽與月亮的平滑透明度 (地平線下漸隱)
+        // 假設地平線在天底，當天體 y 值小於地平線高度時顯現
+        const horizonLimit = canvas.height * 0.75;
+        let sunOpacity = Math.max(0, Math.min(1.0, (horizonLimit - sunY) / 100));
+        let moonOpacity = Math.max(0, Math.min(1.0, (horizonLimit - moonY) / 100));
+
+        // A. 繪製太陽 (擁有誇張的神聖金色放射光芒)
+        if (sunOpacity > 0) {
+            ctx.save();
+            ctx.globalAlpha = sunOpacity;
+
+            // 誇張耀眼的太陽光斑線條 (Sunbeams)
+            ctx.strokeStyle = "rgba(254, 215, 170, 0.12)";
+            ctx.lineWidth = 3;
+            const beamCount = 12;
+            const rotationOffset = score * 0.002;
+            for (let b = 0; b < beamCount; b++) {
+                const beamAngle = (b / beamCount) * Math.PI * 2 + rotationOffset;
+                ctx.beginPath();
+                ctx.moveTo(sunX, sunY);
+                ctx.lineTo(sunX + Math.cos(beamAngle) * 350, sunY + Math.sin(beamAngle) * 350);
+                ctx.stroke();
+            }
+
+            // 雙層日暈
+            const sunGlow = ctx.createRadialGradient(sunX, sunY, 15, sunX, sunY, 140);
+            sunGlow.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            sunGlow.addColorStop(0.3, 'rgba(245, 158, 11, 0.3)');
+            sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = sunGlow;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 140, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 太陽本體
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 50, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // B. 繪製【極致誇張】豐收巨月 (擁有人俗風情之神祕陰影紋理)
+        if (moonOpacity > 0) {
+            ctx.save();
+            ctx.globalAlpha = moonOpacity;
+
+            const moonRadius = 130; // 誇張巨大
+            // 豐收月外發光
+            const moonGlow = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.5, moonX, moonY, moonRadius * 1.8);
+            moonGlow.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+            moonGlow.addColorStop(0.4, 'rgba(217, 119, 6, 0.18)');
+            moonGlow.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = moonGlow;
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, moonRadius * 1.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 巨月本體
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 巨月斑駁古樸陰影 (呈現手繪感)
+            ctx.fillStyle = 'rgba(217, 119, 6, 0.12)';
+            ctx.beginPath();
+            ctx.arc(moonX - 35, moonY - 30, 45, 0, Math.PI * 2);
+            ctx.arc(moonX + 45, moonY + 25, 60, 0, Math.PI * 2);
+            ctx.arc(moonX - 10, moonY + 45, 35, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 穿過巨大金月的楓香枯木投影 (戲劇張力)
+            ctx.strokeStyle = 'rgba(18, 5, 2, 0.45)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(moonX - moonRadius, moonY + 30);
+            ctx.quadraticCurveTo(moonX - 10, moonY + 10, moonX + moonRadius * 0.4, moonY - 40);
+            ctx.stroke();
+            // 細枝
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(moonX - 40, moonY + 15);
+            ctx.lineTo(moonX - 70, moonY - 20);
+            ctx.moveTo(moonX + 10, moonY - 10);
+            ctx.lineTo(moonX + 40, moonY - 45);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // 4. 世界持久性：浮世繪風格手繪「捲雲」
+        // 雲的 x 座標完全與 `bgScrollFar` 綁定，不會隨著時間瞬間跳轉
+        ctx.save();
+        backgroundClouds.forEach(cloud => {
+            // 將雲的世界 X 座標投射到螢幕上，循環滾動
+            const cx = ((cloud.worldX - bgScrollFar * cloud.speedFactor) % 3000 + 3000) % 3000 - 300;
+            const cy = cloud.y;
+            const r = 26 * cloud.scale;
+
+            ctx.globalAlpha = dynamicPal.phase === 3 ? 0.12 : 0.32;
+            ctx.fillStyle = dynamicPal.phase === 2 ? '#b91c1c' : '#fbcfe8'; // 暮色時雲呈現血紅色
+            
+            // 繪製日式古典祥雲結構
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.arc(cx - r * 0.8, cy + r * 0.2, r * 0.7, 0, Math.PI * 2);
+            ctx.arc(cx + r * 0.8, cy + r * 0.1, r * 0.8, 0, Math.PI * 2);
+            ctx.arc(cx + r * 1.5, cy + r * 0.3, r * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 祥雲底雲腳
+            ctx.fillRect(cx - r * 1.5, cy + r * 0.2, r * 3.5, r * 0.5);
+        });
+        ctx.restore();
+
+        // 5. 【視差滾動遠景山脈】：高聳、尖銳的深秋山脊
+        ctx.save();
+        ctx.fillStyle = dynamicPal.mountainFar; 
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height);
+        for (let x = 0; x <= canvas.width; x += 10) {
+            const mountainY = canvas.height * 0.5 + 
+                Math.sin((x + bgScrollFar) * 0.0025) * 90 + 
+                Math.sin((x * 2 + bgScrollFar * 1.5) * 0.008) * 35;
+            ctx.lineTo(x, mountainY);
+        }
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // 6. 【視差滾動中景山脈】
+        ctx.save();
+        ctx.fillStyle = dynamicPal.mountainMid; 
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height);
+        for (let x = 0; x <= canvas.width; x += 15) {
+            const hillY = canvas.height * 0.65 + 
+                Math.sin((x + bgScrollMid) * 0.004) * 60;
+            ctx.lineTo(x, hillY);
+        }
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+
+        // 7. 【全新持久性機制】：中景植被格線繪製（冷杉樹、發光巨型芒草）
+        // 利用世界座標格線 (World Grid)，確保所有樹木芒草「只隨背景向左移動」且其大小、形態絕對持久，杜絕閃動與形變
+        ctx.save();
+        ctx.fillStyle = dynamicPal.mountainMid;
+        
+        const gridStep = 130; // 每個格子寬度
+        const startGridIdx = Math.floor(bgScrollMid / gridStep);
+        const endGridIdx = startGridIdx + Math.ceil(canvas.width / gridStep) + 2;
+
+        for (let i = startGridIdx; i <= endGridIdx; i++) {
+            const worldX = i * gridStep;
+            // 投影至螢幕
+            const screenX = worldX - bgScrollMid;
+            
+            // 使用完全固定的格線 Index 做為隨機數種子 (i)
+            // 這樣保證格子內的物件一旦生成，外觀永遠固定，移動時不會突然變換
+            const persistentSeed = Math.sin(i * 451.71) * 1000;
+            const treeTypeSeed = Math.abs(persistentSeed) % 2; // 0 為杉樹，1 為芒草
+            const objScale = 0.85 + (Math.abs(persistentSeed * 1.3) % 4) * 0.1; // 隨機持久大小
+
+            // 依格子座標計算其山丘高度，確保與地平線完美契合
+            const objY = canvas.height * 0.65 + Math.sin(worldX * 0.004) * 60;
+
+            if (treeTypeSeed > 1.0) {
+                // 1. 繪製精緻的冷杉枯木剪影
+                const treeH = (48 + (Math.abs(persistentSeed * 1.5) % 25)) * objScale;
+                ctx.beginPath();
+                ctx.moveTo(screenX, objY);
+                ctx.lineTo(screenX - 11, objY);
+                ctx.lineTo(screenX, objY - treeH);
+                ctx.lineTo(screenX + 11, objY);
+                ctx.closePath();
+                ctx.fill();
+
+                // 畫松針分支橫條
+                for (let h = 0.25; h < 0.95; h += 0.2) {
+                    ctx.beginPath();
+                    ctx.moveTo(screenX, objY - treeH * h);
+                    const widthVal = 14 * (1.1 - h) * objScale;
+                    ctx.lineTo(screenX - widthVal, objY - treeH * h + 10);
+                    ctx.lineTo(screenX + widthVal, objY - treeH * h + 10);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            } else {
+                // 2. 繪製誇張巨大的【手繪發光近景芒草】
+                ctx.save();
+                ctx.translate(screenX, objY);
+                
+                // 芒草在風中微微搖擺（持久性的世界時間正弦波）
+                const windSway = Math.sin(score * 0.015 + i * 2.3) * 0.08;
+                ctx.rotate(windSway - 0.15); // 整體向左微傾斜
+
+                const stalkH = (55 + (Math.abs(persistentSeed * 2.1) % 30)) * objScale;
+                
+                // 描繪芒草主骨幹
+                ctx.strokeStyle = lerpColor(dynamicPal.mountainMid, '#fde047', 0.22); // 與夜晚/白天融合的發光勾邊
+                ctx.lineWidth = 2.0;
+                ctx.beginPath();
+                ctx.moveTo(0, 5);
+                ctx.quadraticCurveTo(-15, -stalkH * 0.5, -20, -stalkH);
+                ctx.stroke();
+
+                // 巨大發光絮羽
+                ctx.strokeStyle = lerpColor(dynamicPal.mountainMid, '#fef08a', 0.4);
+                ctx.lineWidth = 1.0;
+                for (let step = 0; step < 8; step++) {
+                    const ratio = step / 7;
+                    const tipX = -20 - ratio * 18;
+                    const tipY = -stalkH - ratio * 24;
+                    ctx.beginPath();
+                    ctx.moveTo(-20 + ratio * 12, -stalkH * 0.85);
+                    ctx.quadraticCurveTo(tipX, tipY, tipX - 4, tipY + 8);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+        ctx.restore();
+
+        // 8. 夜晚專屬：螢火蟲粒子在巨大植被間飛舞
+        ctx.save();
+        nightFireflies.forEach(f => {
+            if (f.alpha > 0) {
+                const glowGrad = ctx.createRadialGradient(f.x, f.y, 1, f.x, f.y, f.size * 4);
+                glowGrad.addColorStop(0, `rgba(254, 240, 138, ${f.alpha * (0.5 + Math.sin(f.pulse + score * 0.05) * 0.3)})`);
+                glowGrad.addColorStop(0.4, `rgba(217, 119, 6, ${f.alpha * 0.25})`);
+                glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = glowGrad;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.size * 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+        ctx.restore();
+
+        // C. 繪製風切線條 (Wind Lines)
+        ctx.lineWidth = 1.5;
+        windLines.forEach(line => {
+            ctx.strokeStyle = `rgba(254, 240, 138, ${line.opacity * Math.min(1.5, speedMultiplier)})`;
+            ctx.beginPath();
+            ctx.moveTo(line.x, line.y);
+            ctx.lineTo(line.x + line.length * Math.min(1.4, speedMultiplier), line.y);
+            ctx.stroke();
+        });
+
+        // D. 繪製深秋飄葉 (Background Leaves)
+        bgLeaves.forEach(leaf => {
+            ctx.save();
+            ctx.translate(leaf.x, leaf.y);
+            ctx.rotate(leaf.angle);
+            ctx.fillStyle = leaf.color;
+            ctx.globalAlpha = 0.35;
+
+            ctx.beginPath();
+            ctx.moveTo(0, -leaf.size);
+            ctx.quadraticCurveTo(leaf.size, -leaf.size/2, 0, leaf.size);
+            ctx.quadraticCurveTo(-leaf.size, -leaf.size/2, 0, -leaf.size);
+            ctx.fill();
+
+            ctx.restore();
+        });
+        ctx.globalAlpha = 1.0; 
+
+        // E. 繪製金色芒花 (Gold Miscanthus)
+        collectibles.forEach(col => {
+            ctx.save();
+            ctx.translate(col.x, col.y);
+
+            const glowGrad = ctx.createRadialGradient(0, 0, 3, 0, 0, col.radius + 6);
+            glowGrad.addColorStop(0, 'rgba(254, 240, 138, 0.85)');
+            glowGrad.addColorStop(0.5, 'rgba(217, 119, 6, 0.35)');
+            glowGrad.addColorStop(1, 'rgba(217, 119, 6, 0)');
+            ctx.fillStyle = glowGrad;
+            ctx.beginPath();
+            ctx.arc(0, 0, col.radius + 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 2.5;
+            for (let j = 0; j < 8; j++) {
+                const angle = (j / 8) * Math.PI * 2 + (col.bob * 0.5);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                const cpX = Math.cos(angle) * (col.radius * 0.6);
+                const cpY = Math.sin(angle) * (col.radius * 0.6) - 3;
+                const endX = Math.cos(angle) * col.radius;
+                const endY = Math.sin(angle) * col.radius;
+                ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        });
+
+        // F. 繪製玩家 (金黃楓葉 + 加速殘影)
+        if (gameState === STATE_PLAYING) {
+            if (speedMultiplier > 1.3) {
+                ctx.save();
+                ctx.translate(player.x - 12 * speedMultiplier, player.y - player.vy * 0.5);
+                ctx.rotate(player.currentAngle);
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+                ctx.beginPath();
+                ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.currentAngle);
+
+            const leafPulseRadius = player.radius + Math.sin(player.pulse) * 3;
+            const playerGlow = ctx.createRadialGradient(0, 0, 2, 0, 0, leafPulseRadius + 14);
+            playerGlow.addColorStop(0, 'rgba(253, 224, 71, 0.75)');
+            playerGlow.addColorStop(0.6, 'rgba(234, 88, 12, 0.3)');
+            playerGlow.addColorStop(1, 'rgba(234, 88, 12, 0)');
+            ctx.fillStyle = playerGlow;
+            ctx.beginPath();
+            ctx.arc(0, 0, leafPulseRadius + 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#f59e0b'; 
+            ctx.strokeStyle = '#ea580c'; 
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            ctx.moveTo(0, -player.radius - 2);
+            ctx.lineTo(player.radius * 0.4, -player.radius * 0.5);
+            ctx.lineTo(player.radius * 0.95, -player.radius * 0.65);
+            ctx.lineTo(player.radius * 0.6, 0);
+            ctx.lineTo(player.radius * 1.1, 0.2 * player.radius);
+            ctx.lineTo(player.radius * 0.5, player.radius * 0.5);
+            ctx.lineTo(player.radius * 0.65, player.radius * 0.9);
+            ctx.lineTo(0, player.radius * 0.6);
+            ctx.lineTo(0, player.radius * 1.3);
+            ctx.moveTo(0, player.radius * 0.6);
+            ctx.lineTo(-player.radius * 0.65, player.radius * 0.9);
+            ctx.lineTo(-player.radius * 0.5, player.radius * 0.5);
+            ctx.lineTo(-player.radius * 1.1, 0.2 * player.radius);
+            ctx.lineTo(-player.radius * 0.6, 0);
+            ctx.lineTo(-player.radius * 0.95, -player.radius * 0.65);
+            ctx.lineTo(-player.radius * 0.4, -player.radius * 0.5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -player.radius);
+            ctx.lineTo(0, player.radius * 0.6); 
+            ctx.moveTo(0, -player.radius * 0.2);
+            ctx.lineTo(player.radius * 0.6, -player.radius * 0.4);
+            ctx.moveTo(0, -player.radius * 0.2);
+            ctx.lineTo(-player.radius * 0.6, -player.radius * 0.4);
+            ctx.moveTo(0, player.radius * 0.2);
+            ctx.lineTo(player.radius * 0.5, 0.1 * player.radius);
+            ctx.moveTo(0, player.radius * 0.2);
+            ctx.lineTo(-player.radius * 0.5, 0.1 * player.radius);
+            ctx.stroke();
+
+            ctx.restore();
+            ctx.globalAlpha = 1.0;
+        }
+
+        // G. 繪製「飄逸流動狂風場 (Whispy Flowing Windcurrents)」
+        obstacles.forEach(obs => {
+            const halfW = obs.width / 2;
+            const halfH = obs.height / 2; 
+            const centerX = obs.x - halfW;
+            const centerY = obs.y;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            const windGrad = ctx.createLinearGradient(-halfW, 0, halfW, 0);
+            windGrad.addColorStop(0, 'rgba(239, 68, 68, 0)');
+            windGrad.addColorStop(0.2, 'rgba(239, 68, 68, 0.1)');
+            windGrad.addColorStop(0.5, 'rgba(239, 68, 68, 0.2)');
+            windGrad.addColorStop(0.8, 'rgba(239, 68, 68, 0.1)');
+            windGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+            ctx.fillStyle = windGrad;
+            ctx.fillRect(-halfW, -halfH, obs.width, obs.height);
+
+            ctx.lineWidth = 2.0;
+            for (let i = 0; i < 4; i++) {
+                const phase = obs.pulse * 1.5 + i * Math.PI * 0.5;
+                const waveY1 = Math.sin(phase) * (halfH * 0.4);
+                const waveY2 = Math.cos(phase * 1.2) * (halfH * 0.5);
+                const waveY3 = Math.sin(phase * 0.8) * (halfH * 0.4);
+
+                const ribbonGlow = ctx.createLinearGradient(-halfW, 0, halfW, 0);
+                ribbonGlow.addColorStop(0, 'rgba(248, 113, 113, 0)');
+                ribbonGlow.addColorStop(0.3, 'rgba(248, 113, 113, 0.7)');
+                ribbonGlow.addColorStop(0.7, 'rgba(255, 255, 255, 0.8)');
+                ribbonGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+                ctx.strokeStyle = ribbonGlow;
+
+                ctx.beginPath();
+                ctx.moveTo(-halfW, waveY1);
+                ctx.bezierCurveTo(
+                    -halfW * 0.4, waveY1 + waveY2,
+                    halfW * 0.4, waveY2 - waveY3,
+                    halfW, waveY3
+                );
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = 'rgba(248, 113, 113, 0.7)';
+            ctx.lineWidth = 1.5;
+            for (let k = 0; k < 2; k++) {
+                const vortexX = -halfW * 0.3 + k * (halfW * 0.6);
+                const vortexY = Math.sin(obs.pulse + k) * (halfH * 0.2);
+                
+                ctx.save();
+                ctx.translate(vortexX, vortexY);
+                ctx.rotate(obs.pulse * (k === 0 ? 3.5 : -2.5)); 
+
+                ctx.beginPath();
+                let r = 2;
+                for (let theta = 0; theta < Math.PI * 5; theta += 0.1) {
+                    r = 2 + theta * (halfH * 0.05); 
+                    const px = Math.cos(theta) * r;
+                    const py = Math.sin(theta) * r;
+                    if (theta === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            obs.particles.forEach(p => {
+                ctx.save();
+                ctx.translate(p.x - halfW, p.y);
+                ctx.rotate(p.angle);
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = '#991b1b'; 
+                
+                ctx.beginPath();
+                ctx.moveTo(0, -p.size);
+                ctx.quadraticCurveTo(p.size, -p.size/2, 0, p.size);
+                ctx.quadraticCurveTo(-p.size, -p.size/2, 0, -p.size);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            ctx.restore();
+            ctx.globalAlpha = 1.0;
+        });
+
+        // H. 繪製爆炸飛散粒子
+        particles.forEach(p => {
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        });
+        ctx.globalAlpha = 1.0;
+    }
+
+    // --- 遊戲核心迴圈 ---
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
+
+    // --- 遊戲狀態切換 ---
+    const overlay = document.getElementById('overlay');
+    const summaryOverlay = document.getElementById('summary-overlay');
+    const startBtn = document.getElementById('start-btn');
+    const restartBtn = document.getElementById('restart-btn');
+
+    startBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+        }, 400);
+
+        startMusic();
+        gameState = STATE_PLAYING;
+        resetGame();
+    });
+
+    restartBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        summaryOverlay.style.opacity = '0';
+        setTimeout(() => {
+            summaryOverlay.style.display = 'none';
+        }, 400);
+
+        startMusic();
+        gameState = STATE_PLAYING;
+        resetGame();
+    });
+
+    function endGame() {
+        gameState = STATE_GAMEOVER;
+        
+        const finalDistVal = Math.floor(score);
+        document.getElementById('final-dist').innerText = finalDistVal + " m";
+        document.getElementById('amber-300').innerText = rescuedCount + " 朵";
+
+        const rankDisplay = document.getElementById('rank-display');
+        let rankName = "山徑漫遊者";
+
+        if (finalDistVal < 150) {
+            rankName = "初秋落葉";
+        } else if (finalDistVal < 350) {
+            rankName = "乘風漫舞者";
+        } else if (finalDistVal < 650) {
+            rankName = "秋徑御風手";
+        } else if (finalDistVal < 1200) {
+            rankName = "疾風追獵者 ✦";
+        } else if (finalDistVal < 2000) {
+            rankName = "秋意主宰者 ✦✦";
+        } else {
+            rankName = "萬里風之主 👑";
+        }
+
+        if (rescuedCount >= 15) {
+            rankName = "金芒「" + rankName + "」";
+        }
+
+        rankDisplay.innerText = rankName;
+
+        summaryOverlay.style.display = 'flex';
+        setTimeout(() => {
+            summaryOverlay.style.opacity = '1';
+        }, 50);
+    }
+</script>
+
+</body>
+</html>
